@@ -9,6 +9,7 @@ const {
   S3Client,
   GetObjectCommand,
   PutObjectCommand,
+  ListObjectsV2Command,
 } = require("@aws-sdk/client-s3");
 const s3Client = new S3Client({
   region: process.env.REGION,
@@ -35,7 +36,7 @@ app.post("/upload", upload.single("key"), async (req, res) => {
     return res.status(400).send({ Message: "Missing file to upload" });
   }
   const key = req.file.originalname;
-  if (allowedExtensions.includes(key.split(".").slice(-1)[0])) {
+  if (allowedExtensions.includes(key.split(".").pop())) {
     const options = {
       Body: fs.createReadStream(req.file.path),
       Bucket: bucket,
@@ -63,7 +64,7 @@ app.get("/download", async (req, res) => {
   if (key == undefined) {
     return res.status(400).send({ Message: "Missing key parameter" });
   }
-  if (allowedExtensions.includes(key.split(".").slice(-1)[0])) {
+  if (allowedExtensions.includes(key.split(".").pop())) {
     const options = {
       Bucket: bucket,
       Key: key,
@@ -81,6 +82,33 @@ app.get("/download", async (req, res) => {
     return res.status(501).send({
       Message: "Sorry, currently we are supporting only PDF/Excel files",
     });
+  }
+});
+
+app.get("/list-objects", async (req, res) => {
+  const key = req.query["key"];
+  if (key == undefined || key == "") {
+    return res.status(400).send({ Message: "Missing key parameter" });
+  }
+  const options = {
+    Bucket: bucket,
+    Prefix: key,
+  };
+  try {
+    const data = await s3Client.send(new ListObjectsV2Command(options));
+    const selectedKeys = ["Key", "Size", "LastModified"];
+    const tempData = data.Contents;
+    if (tempData == undefined || tempData[0].Key == key + "/") {
+      return res.status(404).send({ Message: `No data available at ${key}` });
+    }
+    const filteredData = tempData.map((element) => {
+      const filterdElement = {};
+      selectedKeys.forEach((key) => (filterdElement[key] = element[key]));
+      return filterdElement;
+    });
+    return res.status(200).send(filteredData);
+  } catch (err) {
+    return res.status(err.$metadata.httpStatusCode).send({ Message: err.Code });
   }
 });
 
