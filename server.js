@@ -10,6 +10,7 @@ const {
   GetObjectCommand,
   PutObjectCommand,
   ListObjectsV2Command,
+  DeleteObjectCommand,
 } = require("@aws-sdk/client-s3");
 const s3Client = new S3Client({
   region: process.env.REGION,
@@ -109,6 +110,33 @@ app.get("/list-objects", async (req, res) => {
     return res.status(200).send(filteredData);
   } catch (err) {
     return res.status(err.$metadata.httpStatusCode).send({ Message: err.Code });
+  }
+});
+
+app.delete("/delete", async (req, res) => {
+  const key = req.query["key"];
+  if (key == undefined || key == "") {
+    return res.status(400).send({ Message: "Missing key parameter" });
+  }
+  if (allowedExtensions.includes(key.split(".").pop())) {
+    const options = {
+      Bucket: bucket,
+      Key: key,
+    };
+    try {
+      await s3Client.send(new DeleteObjectCommand(options));
+      return res
+        .status(200)
+        .send({ Message: `Successfully Deleted the file ${key}` });
+    } catch (err) {
+      return res
+        .status(err.$metadata.httpStatusCode)
+        .send({ Message: err.Code });
+    }
+  } else {
+    return res.status(501).send({
+      Message: "Sorry, currently we are supporting only PDF/Excel files",
+    });
   }
 });
 
